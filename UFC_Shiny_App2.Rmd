@@ -1,0 +1,145 @@
+---
+title: "Shiny App Tutorial"
+author: "Patrick Pena-Aguilar, Mateo Shelton, Sohrab Sadjadi"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages('DT')
+```
+
+
+```{r}
+library(shiny)
+library(shinythemes)
+library(tidyverse)
+library(plotly)
+library(DT)
+library(ggplot2)
+
+setwd("/Users/patricio_pena/downloads/archive-2/data")
+
+ufc_data <- read.csv("Fighters Stats.csv")
+
+ui <- fluidPage( theme = shinytheme("lumen"),
+  titlePanel("UFC Data Visualizer"),
+  sidebarLayout(
+    sidebarPanel(
+      
+      selectInput("data_category", "Choose Data Category:", choices = c("Numerical Data" = "numerical", "Categorical Data" = "categorical")),
+      uiOutput("visualization_type_ui"),
+      
+      selectInput('weight', 'Weight class', choices = c('All', unique(ufc_data$Weight_Class)), selected = 'All'),
+      
+      selectInput('xvar', 'X variable', choices = names(ufc_data), selected = names(ufc_data)[13]),
+      
+      selectInput('yvar', 'Y variable', choices = names(ufc_data), selected = names(ufc_data)[14]),
+      
+      checkboxInput('jitter', 'Jitter scatter points', value = TRUE),
+      
+      hr(),
+      
+      downloadButton('download_data', 'Download filtered data')
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        tabPanel('Plot', plotlyOutput('main_plot', height = '600px')),
+        tabPanel('Data Table', DTOutput('table')),
+        tabPanel('Summary', verbatimTextOutput('summary'))
+      ),
+      plotOutput("visualization_plot")
+    )
+  )
+)
+
+
+server <- function(input, output, session) {
+
+  data <- reactive({
+    if (is.null(input$file)) {
+      return(ufc_data)     
+    } else {
+      return(read.csv(input$file$datapath))  
+    }
+  })
+
+  output$main_plot <- renderPlotly({
+
+    ufc_data <- read.csv("Fighters Stats.csv")
+
+    if (input$visualization_type == "Scatterplot") {
+
+      p <- ggplot(ufc_data, aes_string(x = input$xvar, y = input.yvar)) +
+        geom_point(alpha = 0.7, shape = 1)
+
+      if (input$jitter) {
+        p <- p + geom_jitter(alpha = 0.6)
+      }
+      ggplotly(p)
+    } 
+    
+    else if (input$visualization_type == "Histogram") {
+
+      p <- ggplot(ufc_data, aes_string(input$xvar)) +
+        geom_histogram(fill = "steelblue", color = "black", bins = 30)
+      ggplotly(p)
+      }
+    
+      else if (input$visualization_type == "Density Plot") {
+
+      p <- ggplot(ufc_data, aes_string(input$xvar)) +
+        geom_density(fill = "lightgreen", alpha = 0.6)
+      ggplotly(p)
+      
+      }
+    
+     else if (input$visualization_type == "Bar Plot") {
+
+      p <- ggplot(ufc_data, aes_string(input$xvar)) +
+        geom_bar(fill = "darkred") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      ggplotly(p)
+      
+    }
+
+  })
+  
+  # Data Visualization Type Dropdown 
+  output$visualization_type_ui <- renderUI({
+    if(input$data_category == "numerical"){
+      selectInput("visualization_type", "Select Visualization Type:",
+                  choice = c("Scatter Plot", "Histogram", "Density Plot"))
+    } else if(input$data_category == "categorical"){
+      selectInput("visualization_type", "Select Visualization Type:",
+                  choice = c("Bar Plot"))
+    }
+  })
+
+  # Summary
+  output$summary <- renderPrint({
+    summary(data())
+  })
+
+  # Data Table
+  output$table <- renderDT({
+    datatable(data())
+  })
+
+  # Download filtered data
+  output$download_data <- downloadHandler(
+    filename = function() {
+      "ufc_filtered_data.csv"
+    },
+    content = function(file) {
+      write.csv(data(), file, row.names = FALSE)
+    }
+  )
+}
+
+
+shinyApp(ui, server)
+```
+
